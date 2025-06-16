@@ -1,0 +1,236 @@
+<!-- Option 1 for UI Frontend -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>DSA Instructor Chatbot</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      background-color: #121212;
+      color: #e0e0e0;
+      margin: 0;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      height: 100vh;
+    }
+
+    .chat-container {
+      width: 90%;
+      max-width: 700px;
+      height: 90vh;
+      background-color: #1e1e1e;
+      border-radius: 12px;
+      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    .chat-header {
+      background-color: #333;
+      padding: 15px 20px;
+      border-bottom: 1px solid #444;
+      text-align: center;
+    }
+
+    .chat-header h1 {
+      margin: 0;
+      font-size: 1.5em;
+      color: #ffffff;
+    }
+
+    .chat-header .api-warning {
+      font-size: 0.8em;
+      color: #ffcc00;
+      margin-top: 5px;
+      font-weight: bold;
+    }
+
+    .chat-box {
+      flex-grow: 1;
+      padding: 20px;
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+      gap: 15px;
+    }
+
+    .message {
+      padding: 12px 18px;
+      border-radius: 18px;
+      max-width: 75%;
+      line-height: 1.5;
+      word-wrap: break-word;
+    }
+
+    .user-message {
+      background-color: #007bff;
+      color: white;
+      align-self: flex-end;
+      border-bottom-right-radius: 4px;
+    }
+
+    .bot-message {
+      background-color: #3a3a3a;
+      color: #e0e0e0;
+      align-self: flex-start;
+      border-bottom-left-radius: 4px;
+    }
+
+    .bot-message.typing {
+      font-style: italic;
+      color: #aaa;
+    }
+
+    .chat-input-form {
+      display: flex;
+      padding: 15px;
+      border-top: 1px solid #444;
+      background-color: #252525;
+    }
+
+    #user-input {
+      flex-grow: 1;
+      padding: 12px 15px;
+      border: 1px solid #555;
+      border-radius: 20px;
+      background-color: #333;
+      color: #e0e0e0;
+      font-size: 1em;
+      margin-right: 10px;
+    }
+
+    #user-input:focus {
+      outline: none;
+      border-color: #007bff;
+      box-shadow: 0 0 0 2px rgba(0, 123, 255, 0.25);
+    }
+
+    #send-button {
+      padding: 12px 25px;
+      border: none;
+      background-color: #007bff;
+      color: white;
+      border-radius: 20px;
+      cursor: pointer;
+      font-size: 1em;
+      font-weight: bold;
+      transition: background-color 0.2s;
+    }
+
+    #send-button:hover {
+      background-color: #0056b3;
+    }
+
+    #send-button:disabled {
+      background-color: #555;
+      cursor: not-allowed;
+    }
+  </style>
+</head>
+<body>
+
+<div class="chat-container">
+  <div class="chat-header">
+    <h1>DSA Instructor Chatbot</h1>
+    <div class="api-warning">⚠️ Never expose your API key in public apps!</div>
+  </div>
+  <div class="chat-box" id="chat-box">
+    <div class="message bot-message">
+      I only answer questions about Data Structures and Algorithms. Ask something else, and you'll regret it. What do you want?
+    </div>
+  </div>
+  <form class="chat-input-form" id="chat-form">
+    <input type="text" id="user-input" placeholder="Ask about stacks, queues, trees..." autocomplete="off" />
+    <button type="submit" id="send-button">Ask</button>
+  </form>
+</div>
+
+<script>
+  const chatForm = document.getElementById('chat-form');
+  const userInput = document.getElementById('user-input');
+  const chatBox = document.getElementById('chat-box');
+  const sendButton = document.getElementById('send-button');
+
+  const GEMINI_API_KEY = "AIzaSyDMm5gvphiTn0aIv-dpnmq1oQ1fWrW-C4c";  // <- Replace this with your real key
+  const API_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-latest:generateContent?key=${GEMINI_API_KEY}`;
+
+  const systemInstruction = {
+    role: "model",
+    parts: [{
+      text: `You are a Data structure and Algorithm Instructor. You will only reply to the problem related to 
+      Data structure and Algorithm. You have to solve query of user in simplest way.
+      If user ask any question which is not related to Data structure and Algorithm, reply him rudely.
+      Example: If user asks, 'How are you?'
+      You will reply: 'You dumb, ask me some sensible question!', or something similarly and creatively rude.
+      You must reply him rudely if the question is not related to Data structure and Algorithm.
+      Otherwise, reply politely with a simple explanation.`
+    }]
+  };
+
+  let conversationHistory = [systemInstruction];
+
+  chatForm.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const userText = userInput.value.trim();
+    if (!userText) return;
+
+    userInput.disabled = true;
+    sendButton.disabled = true;
+
+    addMessage(userText, 'user');
+    const userMessage = { role: "user", parts: [{ text: userText }] };
+    conversationHistory.push(userMessage);
+    userInput.value = '';
+
+    const typingIndicator = addMessage('typing...', 'bot typing');
+
+    try {
+      const response = await fetch(API_URL, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ contents: conversationHistory }),
+      });
+
+      if (!response.ok) {
+        const err = await response.json();
+        throw new Error(err.error.message || "API request failed");
+      }
+
+      const data = await response.json();
+      chatBox.removeChild(typingIndicator);
+
+      const botText = data.candidates?.[0]?.content?.parts?.[0]?.text || "No response.";
+      const botMessage = { role: "model", parts: [{ text: botText }] };
+      conversationHistory.push(botMessage);
+      addMessage(botText, 'bot');
+    } catch (err) {
+      chatBox.removeChild(typingIndicator);
+      addMessage("Error: " + err.message, 'bot');
+      console.error(err);
+    } finally {
+      userInput.disabled = false;
+      sendButton.disabled = false;
+      userInput.focus();
+    }
+  });
+
+  function addMessage(text, type) {
+    const msg = document.createElement('div');
+    msg.classList.add('message');
+    msg.classList.add(type.includes('bot') ? 'bot-message' : 'user-message');
+    if (type.includes('typing')) msg.classList.add('typing');
+    msg.textContent = text;
+    chatBox.appendChild(msg);
+    chatBox.scrollTop = chatBox.scrollHeight;
+    return msg;
+  }
+</script>
+
+</body>
+</html>
